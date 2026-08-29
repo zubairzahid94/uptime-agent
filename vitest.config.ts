@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { defineConfig, configDefaults } from "vitest/config";
 
 export default defineConfig({
   test: {
@@ -7,5 +7,6 @@ export default defineConfig({
     // running files in parallel races blanket deleteMany() calls against other
     // files' fixtures. Run test files serially until per-file DB isolation exists.
     fileParallelism: false,
+    exclude: [...configDefaults.exclude, "dist/**", "generated/**"],
   },
 });
