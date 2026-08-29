@@ -9,3 +9,4 @@ generated/
 *.db
 *.db-journal
 prisma/dev.db
+/data/
