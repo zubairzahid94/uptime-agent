@@ -1,32 +1,36 @@
 generator client {
-  provider = "prisma-client-js"
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "esm"
 }
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 model Monitor {
-  id                  String   @id @default(cuid())
+  id                  String    @id @default(cuid())
   url                 String
   label               String
   intervalSeconds     Int
-  expectedStatus      Int      @default(200)
-  state               String   @default("active")
-  currentStatus       String   @default("unknown")
-  consecutiveFailures Int           @default(0)
+  expectedStatus      Int       @default(200)
+  enabled             Boolean   @default(true)
+  /// Allowed values: "up" | "down" | "unknown" - enforced by the Zod schemas in src/llm/tools.ts and the alertCondition guardrail, not by the DB, since SQLite has no native Prisma enum support.
+  healthStatus        String    @default("unknown")
+  consecutiveFailures Int       @default(0)
   lastCheckedAt       DateTime?
   lastStateChangeAt   DateTime?
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
   checks              Check[]
+
+  @@index([enabled, lastCheckedAt])
 }
 
 model Check {
   id          String   @id @default(cuid())
   monitorId   String
-  monitor     Monitor  @relation(fields: [monitorId], references: [id])
+  monitor     Monitor  @relation(fields: [monitorId], references: [id], onDelete: Cascade)
   timestamp   DateTime @default(now())
   success     Boolean
   statusCode  Int?
@@ -38,11 +42,13 @@ model Check {
 }
 
 model Action {
-  id         String   @id @default(cuid())
-  channelId  String
+  id          String   @id @default(cuid())
+  channelId   String
   performedBy String
-  toolName   String
-  argsJson   String
-  result     String
-  createdAt  DateTime @default(now())
+  toolName    String
+  argsJson    String
+  result      String
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
 }

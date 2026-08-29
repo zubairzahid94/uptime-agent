@@ -5,8 +5,8 @@ CREATE TABLE "Monitor" (
     "label" TEXT NOT NULL,
     "intervalSeconds" INTEGER NOT NULL,
     "expectedStatus" INTEGER NOT NULL DEFAULT 200,
-    "state" TEXT NOT NULL DEFAULT 'active',
-    "currentStatus" TEXT NOT NULL DEFAULT 'unknown',
+    "enabled" BOOLEAN NOT NULL DEFAULT true,
+    "healthStatus" TEXT NOT NULL DEFAULT 'unknown',
     "consecutiveFailures" INTEGER NOT NULL DEFAULT 0,
     "lastCheckedAt" DATETIME,
     "lastStateChangeAt" DATETIME,
@@ -24,7 +24,7 @@ CREATE TABLE "Check" (
     "latencyMs" INTEGER,
     "error" TEXT,
     "causedAlert" BOOLEAN NOT NULL DEFAULT false,
-    CONSTRAINT "Check_monitorId_fkey" FOREIGN KEY ("monitorId") REFERENCES "Monitor" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+    CONSTRAINT "Check_monitorId_fkey" FOREIGN KEY ("monitorId") REFERENCES "Monitor" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -39,4 +39,10 @@ CREATE TABLE "Action" (
 );
 
 -- CreateIndex
+CREATE INDEX "Monitor_enabled_lastCheckedAt_idx" ON "Monitor"("enabled", "lastCheckedAt");
+
+-- CreateIndex
 CREATE INDEX "Check_monitorId_timestamp_idx" ON "Check"("monitorId", "timestamp");
+
+-- CreateIndex
+CREATE INDEX "Action_createdAt_idx" ON "Action"("createdAt");
