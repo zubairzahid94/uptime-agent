@@ -4,17 +4,25 @@ import { TOOLS, type ToolName } from "./tools.js";
 import type { LlmAdapter, ChatTurn, AdapterResult } from "./adapter.js";
 
 interface GeminiResponseLike {
-  functionCalls?: Array<{ name?: string; args?: Record<string, unknown> }> | undefined;
+  functionCalls?:
+    | Array<{ name?: string; args?: Record<string, unknown> }>
+    | undefined;
   text?: string | undefined;
 }
 
-export function parseGeminiResponse(response: GeminiResponseLike): AdapterResult {
+export function parseGeminiResponse(
+  response: GeminiResponseLike,
+): AdapterResult {
   const call = response.functionCalls?.[0];
   if (call) {
     if (!call.name) {
       throw new Error("parseGeminiResponse: function call is missing its name");
     }
-    return { kind: "tool_call", toolName: call.name as ToolName, args: call.args ?? {} };
+    return {
+      kind: "tool_call",
+      toolName: call.name as ToolName,
+      args: call.args ?? {},
+    };
   }
   if (typeof response.text === "string") {
     return { kind: "text", text: response.text };
@@ -24,13 +32,28 @@ export function parseGeminiResponse(response: GeminiResponseLike): AdapterResult
 
 const SYSTEM_PROMPT = `You are an uptime-monitoring assistant. You have tools to create, list,
 edit, pause, resume, and delete HTTP monitors, and to report status/summaries.
-If a request is ambiguous (no URL given, or multiple monitors could match), do not guess:
-call the relevant read tool or ask a clarifying question listing the candidates instead.`;
+
+pause_monitor stops checks temporarily (reversible); resume_monitor turns checks back on;
+delete_monitor permanently removes a monitor. Treat "stop", "turn off", or "disable" as
+pause_monitor; "turn back on" or "reactivate" as resume_monitor; "delete", "remove", or
+"get rid of" as delete_monitor. Map the verb directly to its tool; do not second-guess
+which action was meant just because a synonym isn't the exact tool name.
+
+The only thing you must never guess is WHICH monitor a request refers to. If no URL is
+given and the identifier could match more than one monitor, or doesn't clearly match any
+monitor at all, call the relevant read tool or ask a clarifying question listing the
+candidates — do not guess the target.`;
 
 export class GeminiAdapter implements LlmAdapter {
-  constructor(private client: GoogleGenAI, private model = "gemini-2.0-flash") {}
+  constructor(
+    private client: GoogleGenAI,
+    private model = "gemini-3.5-flash-lite",
+  ) {}
 
-  async sendMessage(history: ChatTurn[], userMessage: string): Promise<AdapterResult> {
+  async sendMessage(
+    history: ChatTurn[],
+    userMessage: string,
+  ): Promise<AdapterResult> {
     const functionDeclarations = Object.values(TOOLS).map((tool) => ({
       name: tool.name,
       description: tool.description,
@@ -48,7 +71,10 @@ export class GeminiAdapter implements LlmAdapter {
     }));
 
     const contents = [
-      ...history.map((turn) => ({ role: turn.role === "user" ? "user" : "model", parts: [{ text: turn.text }] })),
+      ...history.map((turn) => ({
+        role: turn.role === "user" ? "user" : "model",
+        parts: [{ text: turn.text }],
+      })),
       { role: "user", parts: [{ text: userMessage }] },
     ];
 
