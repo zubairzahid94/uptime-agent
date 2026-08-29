@@ -24,7 +24,7 @@ describe("mutating handlers", () => {
     expect(monitor.label).toBe("hanifautos.com");
     const actions = await prisma.action.findMany();
     expect(actions).toHaveLength(1);
-    expect(actions[0].toolName).toBe("create_monitor");
+    expect(actions[0]!.toolName).toBe("create_monitor");
   });
 
   it("pauseMonitor and resumeMonitor toggle enabled", async () => {
