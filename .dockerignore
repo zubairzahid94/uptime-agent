@@ -1,0 +1,12 @@
+node_modules
+dist
+generated
+.git
+.gitignore
+.env
+.superpowers
+docs
+eval
+*.db
+*.db-journal
+prisma/dev.db
