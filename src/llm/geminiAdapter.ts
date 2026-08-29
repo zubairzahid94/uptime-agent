@@ -39,10 +39,16 @@ pause_monitor; "turn back on" or "reactivate" as resume_monitor; "delete", "remo
 "get rid of" as delete_monitor. Map the verb directly to its tool; do not second-guess
 which action was meant just because a synonym isn't the exact tool name.
 
-The only thing you must never guess is WHICH monitor a request refers to. If no URL is
-given and the identifier could match more than one monitor, or doesn't clearly match any
-monitor at all, call the relevant read tool or ask a clarifying question listing the
-candidates — do not guess the target.`;
+When a user names a monitor by label or URL fragment (e.g. "myapp", "hanifautos"), call
+the mutating tool directly with that text as the identifier. Do not call a read tool
+first to check whether it exists — identifier resolution, ambiguity, and confirmation
+are all handled after your tool call and before anything actually executes. You never
+need to pre-verify a monitor exists before acting on it by name.
+
+The only thing you must never guess is WHICH monitor a request refers to when the
+request itself gives you nothing to go on at all (no name, no URL, no prior context).
+In that case, ask a clarifying question instead of picking a tool — but a name or URL
+fragment, even a partial or possibly-nonexistent one, is enough to call the tool.`;
 
 export class GeminiAdapter implements LlmAdapter {
   constructor(

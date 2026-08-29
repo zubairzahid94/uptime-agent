@@ -1,4 +1,5 @@
 import type { ToolName } from "../src/llm/tools.js";
+import type { ChatTurn } from "../src/llm/adapter.js";
 
 export interface SingleTurnCase {
   kind: "single_turn";
@@ -11,7 +12,10 @@ export interface SingleTurnCase {
 export interface MultiTurnCase {
   kind: "multi_turn";
   name: string;
-  turns: string[]; // all but the last are prior user turns; the last is the message being evaluated
+  // All but the last are prior conversation turns (role-tagged, so an assistant
+  // clarifying question can actually appear in history); the last must be a user
+  // turn and is the message being evaluated.
+  turns: ChatTurn[];
   expectedTool: ToolName;
   expectedArgs: Record<string, unknown>;
 }
@@ -25,7 +29,7 @@ export const SINGLE_TURN_CASES: SingleTurnCase[] = [
   },
   {
     kind: "single_turn", name: "delete by informal name",
-    input: "stop the one for hanifautos",
+    input: "permanently delete the hanifautos monitor",
     expectedTool: "delete_monitor",
     expectedArgs: { identifier: "hanifautos" },
   },
@@ -70,7 +74,16 @@ export const SINGLE_TURN_CASES: SingleTurnCase[] = [
 export const MULTI_TURN_CASES: MultiTurnCase[] = [
   {
     kind: "multi_turn", name: "disambiguation follow-up resolves to second candidate",
-    turns: ["stop the monitor", "the second one"],
+    // The assistant turn matters here: without it the model has no candidate list to
+    // resolve "the second one" against, and reasonably falls back to a read tool.
+    turns: [
+      { role: "user", text: "delete the monitor for hanifautos" },
+      {
+        role: "assistant",
+        text: "Multiple monitors match \"hanifautos\":\n- https://hanifautos.com/a\n- https://hanifautos.com/b\nWhich one?",
+      },
+      { role: "user", text: "the second one" },
+    ],
     expectedTool: "delete_monitor",
     expectedArgs: {},
   },
