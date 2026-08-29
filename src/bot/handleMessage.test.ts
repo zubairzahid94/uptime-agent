@@ -65,4 +65,22 @@ describe("handleMessage", () => {
     const reply = await handleMessage(deps, { ...ctx, text: "stop the monitor" });
     expect(reply).toBe("Which monitor did you mean?");
   });
+
+  it("does not send the current message to the adapter twice (once in history, once as userMessage)", async () => {
+    const deps = makeDeps();
+    deps.history.append(ctx.channelId, { role: "user", text: "earlier message" });
+    (deps.adapter.sendMessage as any).mockResolvedValue({ kind: "text", text: "ok" });
+    await handleMessage(deps, { ...ctx, text: "the new message" });
+    const [historyArg, userMessageArg] = (deps.adapter.sendMessage as any).mock.calls[0];
+    expect(userMessageArg).toBe("the new message");
+    expect(historyArg.some((turn: any) => turn.text === "the new message")).toBe(false);
+  });
+
+  it("rejects gracefully instead of crashing when the adapter returns an unrecognized tool name", async () => {
+    const deps = makeDeps();
+    (deps.adapter.sendMessage as any).mockResolvedValue({ kind: "tool_call", toolName: "not_a_real_tool", args: {} });
+    const reply = await handleMessage(deps, { ...ctx, text: "do something weird" });
+    expect(reply.toLowerCase()).toContain("don't know how");
+    expect(deps.pendingActions.get(ctx.channelId, ctx.userId)).toBeUndefined();
+  });
 });

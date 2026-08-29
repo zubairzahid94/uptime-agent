@@ -56,8 +56,12 @@ export async function handleMessage(deps: Deps, ctx: MessageContext): Promise<st
     // any off-script reply falls through to fresh interpretation below
   }
 
+  // Fetch prior history BEFORE appending the current turn: the adapter's sendMessage(history, userMessage)
+  // treats `userMessage` as the final turn itself, so `history` must hold only what came before it,
+  // otherwise the current message is sent to the LLM twice (once inside history, once as userMessage).
+  const priorHistory = deps.history.get(ctx.channelId);
   deps.history.append(ctx.channelId, { role: "user", text: ctx.text });
-  const result = await deps.adapter.sendMessage(deps.history.get(ctx.channelId), ctx.text);
+  const result = await deps.adapter.sendMessage(priorHistory, ctx.text);
 
   if (result.kind === "text") {
     deps.history.append(ctx.channelId, { role: "assistant", text: result.text });
@@ -65,6 +69,9 @@ export async function handleMessage(deps: Deps, ctx: MessageContext): Promise<st
   }
 
   const tool = TOOLS[result.toolName];
+  if (!tool) {
+    return `Sorry, I don't know how to do "${result.toolName}".`;
+  }
   const parsed = tool.schema.safeParse(result.args);
   if (!parsed.success) {
     return `Sorry, I couldn't understand that request well enough to act on it (${parsed.error.issues[0]?.message}).`;
