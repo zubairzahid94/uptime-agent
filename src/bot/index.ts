@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { Client, GatewayIntentBits, Partials } from "discord.js";
 import { GoogleGenAI } from "@google/genai";
 import { GeminiAdapter } from "../llm/geminiAdapter.js";
@@ -14,6 +15,9 @@ if (!OWNER_ID) throw new Error("OWNER_DISCORD_ID env var is required");
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY env var is required");
+
+const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+if (!DISCORD_TOKEN) throw new Error("DISCORD_TOKEN env var is required");
 
 const genAi = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 const deps = {
@@ -57,4 +61,4 @@ setInterval(() => {
   }).catch((err) => console.error("scheduler tick failed", err));
 }, SCHEDULER_TICK_MS);
 
-client.login(process.env.DISCORD_TOKEN);
+client.login(DISCORD_TOKEN);
