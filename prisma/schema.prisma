@@ -1,0 +1,48 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Monitor {
+  id                  String   @id @default(cuid())
+  url                 String
+  label               String
+  intervalSeconds     Int
+  expectedStatus      Int      @default(200)
+  state               String   @default("active")
+  currentStatus       String   @default("unknown")
+  consecutiveFailures Int           @default(0)
+  lastCheckedAt       DateTime?
+  lastStateChangeAt   DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  checks              Check[]
+}
+
+model Check {
+  id          String   @id @default(cuid())
+  monitorId   String
+  monitor     Monitor  @relation(fields: [monitorId], references: [id])
+  timestamp   DateTime @default(now())
+  success     Boolean
+  statusCode  Int?
+  latencyMs   Int?
+  error       String?
+  causedAlert Boolean  @default(false)
+
+  @@index([monitorId, timestamp])
+}
+
+model Action {
+  id         String   @id @default(cuid())
+  channelId  String
+  performedBy String
+  toolName   String
+  argsJson   String
+  result     String
+  createdAt  DateTime @default(now())
+}
