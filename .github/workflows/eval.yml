@@ -1,0 +1,21 @@
+name: Eval
+on:
+  pull_request:
+    paths:
+      - "src/llm/**"
+      - "src/tools/**"
+      - "eval/**"
+
+jobs:
+  golden-dataset:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run eval
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
