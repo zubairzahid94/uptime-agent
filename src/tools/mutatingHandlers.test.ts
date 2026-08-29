@@ -56,6 +56,17 @@ describe("mutating handlers", () => {
     const result = await pauseMonitor({ identifier: "ghost" }, ctx);
     expect(result.kind).toBe("not_found");
   });
+
+  it("rejects createMonitor once the MAX_MONITORS soft cap is reached, without writing an action or calling the SSRF check", async () => {
+    const originalMax = process.env.MAX_MONITORS;
+    process.env.MAX_MONITORS = "1";
+    await prisma.monitor.create({ data: { url: "https://a.com", label: "a", intervalSeconds: 60 } });
+    const result = await createMonitor({ url: "https://b.com", intervalSeconds: 60 }, ctx);
+    expect(result.message.toLowerCase()).toContain("limit");
+    expect(await prisma.monitor.count()).toBe(1);
+    expect(await prisma.action.count()).toBe(0);
+    process.env.MAX_MONITORS = originalMax;
+  });
 });
 
 afterAll(async () => {

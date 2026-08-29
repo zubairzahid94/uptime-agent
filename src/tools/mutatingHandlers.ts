@@ -22,6 +22,11 @@ export async function createMonitor(
   args: { url: string; intervalSeconds: number; expectedStatus?: number; label?: string },
   ctx: ActionContext,
 ): Promise<HandlerResult> {
+  const maxMonitors = Number(process.env.MAX_MONITORS ?? 50);
+  const existingCount = await prisma.monitor.count();
+  if (existingCount >= maxMonitors) {
+    return { kind: "ok", message: `Can't create another monitor: you're at the limit of ${maxMonitors}. Delete one first.` };
+  }
   await assertUrlIsSafe(args.url);
   const monitor = await prisma.monitor.create({
     data: {
