@@ -14,6 +14,9 @@ function ipToLong(ip: string): number {
 
 function inRange(ip: string, cidr: string): boolean {
   const [range, bitsStr] = cidr.split("/");
+  if (range === undefined || bitsStr === undefined) {
+    throw new Error(`invalid CIDR: ${cidr}`);
+  }
   const bits = Number(bitsStr);
   const mask = bits === 0 ? 0 : (~0 << (32 - bits)) >>> 0;
   return (ipToLong(ip) & mask) === (ipToLong(range) & mask);
