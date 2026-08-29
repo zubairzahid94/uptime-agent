@@ -7,6 +7,7 @@ const ctx = { channelId: "dm-1", performedBy: "owner-1" };
 
 describe("mutating handlers", () => {
   beforeEach(async () => {
+    vi.clearAllMocks();
     vi.spyOn(ssrf, "assertUrlIsSafe").mockResolvedValue(undefined);
     await prisma.action.deleteMany();
     await prisma.check.deleteMany();
@@ -65,6 +66,23 @@ describe("mutating handlers", () => {
     expect(result.message.toLowerCase()).toContain("limit");
     expect(await prisma.monitor.count()).toBe(1);
     expect(await prisma.action.count()).toBe(0);
+    expect(ssrf.assertUrlIsSafe).not.toHaveBeenCalled();
+    process.env.MAX_MONITORS = originalMax;
+  });
+
+  it("falls back to the default cap of 50 when MAX_MONITORS is empty or non-numeric, instead of blocking everything or disabling the cap", async () => {
+    const originalMax = process.env.MAX_MONITORS;
+
+    process.env.MAX_MONITORS = "";
+    const emptyResult = await createMonitor({ url: "https://c.com", intervalSeconds: 60 }, ctx);
+    expect(emptyResult.kind).toBe("ok");
+    expect(emptyResult.message.toLowerCase()).not.toContain("limit");
+
+    process.env.MAX_MONITORS = "not-a-number";
+    const garbageResult = await createMonitor({ url: "https://d.com", intervalSeconds: 60 }, ctx);
+    expect(garbageResult.kind).toBe("ok");
+    expect(garbageResult.message.toLowerCase()).not.toContain("limit");
+
     process.env.MAX_MONITORS = originalMax;
   });
 });

@@ -22,7 +22,12 @@ export async function createMonitor(
   args: { url: string; intervalSeconds: number; expectedStatus?: number; label?: string },
   ctx: ActionContext,
 ): Promise<HandlerResult> {
-  const maxMonitors = Number(process.env.MAX_MONITORS ?? 50);
+  const parsedMax = Number(process.env.MAX_MONITORS ?? "");
+  // Number("") is 0 (would block all creation); Number("garbage") is NaN, and
+  // `count >= NaN` is always false (would silently disable the cap entirely) —
+  // both are the wrong failure direction for a safety guardrail, so fall back to
+  // the documented default of 50 for anything that isn't a real finite number.
+  const maxMonitors = Number.isFinite(parsedMax) && parsedMax > 0 ? parsedMax : 50;
   const existingCount = await prisma.monitor.count();
   if (existingCount >= maxMonitors) {
     return { kind: "ok", message: `Can't create another monitor: you're at the limit of ${maxMonitors}. Delete one first.` };
