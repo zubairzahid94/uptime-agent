@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "start": "node dist/bot/index.js",
+    "start": "node dist/src/bot/index.js",
     "dev": "tsx src/bot/index.ts",
     "test": "vitest run",
     "eval": "tsx eval/run.ts",
