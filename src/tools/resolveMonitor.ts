@@ -14,6 +14,6 @@ export async function resolveMonitor(identifier: string): Promise<ResolveResult>
     : await prisma.monitor.findMany({ where: { url: { contains: needle } } });
 
   if (matches.length === 0) return { kind: "not_found" };
-  if (matches.length === 1) return { kind: "found", monitor: matches[0] };
+  if (matches.length === 1) return { kind: "found", monitor: matches[0]! };
   return { kind: "ambiguous", candidates: matches };
 }
