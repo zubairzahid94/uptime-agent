@@ -37,7 +37,7 @@ const client = new Client({
 /**
  * Sends a reply, splitting it across messages if it would exceed Discord's 2000-char
  * limit. listMonitors at MAX_MONITORS=50 can comfortably blow past that, and an
- * over-long message.reply() throws — which used to mean the user got nothing at all.
+ * over-long message.reply() throws, which used to mean the user got nothing at all.
  */
 async function sendReply(message: Message, text: string): Promise<void> {
   const body = text.trim() === "" ? "(no response)" : text;
@@ -71,7 +71,7 @@ client.on("messageCreate", async (message) => {
       error: err instanceof Error ? err.message : String(err),
     });
     // Reaching here means handleMessage's own try/catch didn't cover it (e.g. Discord
-    // itself rejected the send). Say SOMETHING — silence is the worst outcome.
+    // itself rejected the send). Say SOMETHING; silence is the worst outcome.
     try {
       await message.reply("Something went wrong handling that.");
     } catch (replyErr) {
@@ -94,7 +94,7 @@ const notifyOwner = async (text: string): Promise<void> => {
 };
 
 // Re-entrancy guard. Without it, a monitor whose connection stalls holds its tick open
-// while new ticks keep firing every 15s — and each of those sees the same monitor as
+// while new ticks keep firing every 15s, and each of those sees the same monitor as
 // still due, because lastCheckedAt only advances after the fetch resolves. That risks
 // duplicate Check rows and, worse, two overlapping evaluations both crossing the alert
 // threshold and firing onStateChange twice, breaking "notify only on real transitions".

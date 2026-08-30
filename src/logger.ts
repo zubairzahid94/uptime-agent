@@ -4,10 +4,10 @@ import winston from "winston";
  * Structured stdout logging for a self-hosted single-process bot.
  *
  * Deliberately minimal: one JSON-per-line Console transport, no files, no
- * rotation, no transports to configure — a container runtime or systemd unit
+ * rotation, no transports to configure; a container runtime or systemd unit
  * collects stdout. Level is `info` by default, overridable with LOG_LEVEL.
  *
- * Never log message content, tool args, URLs' query strings, or API keys —
+ * Never log message content, tool args, URLs' query strings, or API keys:
  * only shapes, counts, kinds, and timings.
  */
 export const logger = winston.createLogger({

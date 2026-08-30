@@ -5,6 +5,8 @@ import { ConversationHistoryStore } from "./history.js";
 import { renderConfirmationPrompt } from "./templates.js";
 import * as readHandlersModule from "../tools/readHandlers.js";
 import * as mutatingHandlersModule from "../tools/mutatingHandlers.js";
+import { SsrfBlockedError } from "../guardrails/ssrf.js";
+import { logger } from "../logger.js";
 
 export interface Deps {
   adapter: Pick<LlmAdapter, "sendMessage">;
@@ -45,13 +47,52 @@ async function runReadHandler(deps: Deps, toolName: ToolName, args: unknown): Pr
   }
 }
 
+/**
+ * Turns a thrown handler error into something worth saying to the user.
+ *
+ * Before this existed, any throw here propagated to the messageCreate listener,
+ * whose catch only logged, so the user got no reply at all. The most reachable
+ * case by far is confirming a create/edit for a URL the SSRF guardrail rejects.
+ */
+function userFacingError(err: unknown, toolName: ToolName): string {
+  logger.error("tool handler threw", {
+    toolName,
+    errorName: err instanceof Error ? err.name : typeof err,
+    error: err instanceof Error ? err.message : String(err),
+  });
+
+  if (err instanceof SsrfBlockedError) {
+    switch (err.reason) {
+      case "unresolvable":
+        return "I can't monitor that URL: I couldn't resolve that hostname. Is it spelled correctly?";
+      case "invalid_url":
+        return "I can't monitor that URL: it isn't a valid http or https URL.";
+      default:
+        return "I can't monitor that URL: it resolves to a private or internal address.";
+    }
+  }
+  return "Something went wrong handling that. Please try again.";
+}
+
 export async function handleMessage(deps: Deps, ctx: MessageContext): Promise<string> {
   const pending = deps.pendingActions.get(ctx.channelId, ctx.userId);
 
   if (pending) {
     deps.pendingActions.clear(ctx.channelId, ctx.userId);
     if (isYes(ctx.text)) {
-      return runMutatingHandler(deps, pending.toolName, pending.args, ctx);
+      let reply: string;
+      try {
+        reply = await runMutatingHandler(deps, pending.toolName, pending.args, ctx);
+      } catch (err) {
+        reply = userFacingError(err, pending.toolName);
+      }
+      // The confirmed action's own result must go into history, not just to the user.
+      // When it resolves ambiguously the reply IS the candidate list, and a follow-up
+      // like "the second one" can only be resolved against context that records it.
+      // The "yes" is recorded too, so history doesn't end on two assistant turns.
+      deps.history.append(ctx.channelId, { role: "user", text: ctx.text });
+      deps.history.append(ctx.channelId, { role: "assistant", text: reply });
+      return reply;
     }
     // any off-script reply falls through to fresh interpretation below
   }
@@ -78,13 +119,23 @@ export async function handleMessage(deps: Deps, ctx: MessageContext): Promise<st
   }
 
   if (tool.mutating) {
+    let prompt: string;
+    try {
+      prompt = renderConfirmationPrompt(tool.name, parsed.data);
+    } catch (err) {
+      return userFacingError(err, tool.name);
+    }
     deps.pendingActions.set(ctx.channelId, ctx.userId, { toolName: tool.name, args: parsed.data, createdAt: Date.now() });
-    const prompt = renderConfirmationPrompt(tool.name, parsed.data);
     deps.history.append(ctx.channelId, { role: "assistant", text: prompt });
     return prompt;
   }
 
-  const reply = await runReadHandler(deps, tool.name, parsed.data);
+  let reply: string;
+  try {
+    reply = await runReadHandler(deps, tool.name, parsed.data);
+  } catch (err) {
+    reply = userFacingError(err, tool.name);
+  }
   deps.history.append(ctx.channelId, { role: "assistant", text: reply });
   return reply;
 }

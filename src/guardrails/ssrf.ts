@@ -1,10 +1,20 @@
 import dns from "node:dns/promises";
 import { isIP } from "node:net";
 
+/**
+ * Why a URL was rejected. Callers surface different user-facing copy per reason:
+ * telling someone their typo'd domain "resolves to a private address" would be
+ * actively wrong, and DNS failures route through this error type by design.
+ */
+export type SsrfBlockReason = "invalid_url" | "unresolvable" | "blocked_address";
+
 export class SsrfBlockedError extends Error {
-  constructor(url: string, reason: string) {
-    super(`Blocked unsafe URL ${url}: ${reason}`);
+  readonly reason: SsrfBlockReason;
+
+  constructor(url: string, detail: string, reason: SsrfBlockReason = "blocked_address") {
+    super(`Blocked unsafe URL ${url}: ${detail}`);
     this.name = "SsrfBlockedError";
+    this.reason = reason;
   }
 }
 
@@ -91,15 +101,15 @@ export async function assertUrlIsSafe(rawUrl: string): Promise<void> {
   try {
     parsed = new URL(rawUrl);
   } catch {
-    throw new SsrfBlockedError(rawUrl, "not a valid URL");
+    throw new SsrfBlockedError(rawUrl, "not a valid URL", "invalid_url");
   }
 
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new SsrfBlockedError(rawUrl, `scheme ${parsed.protocol} not allowed`);
+    throw new SsrfBlockedError(rawUrl, `scheme ${parsed.protocol} not allowed`, "invalid_url");
   }
 
   // URL.hostname keeps the brackets on an IPv6 literal (http://[::1]/ -> "[::1]"),
-  // which isIP() does not recognise — strip them so literals of both families take
+  // which isIP() does not recognise, so strip them so literals of both families take
   // the literal-IP path instead of falling through to a doomed DNS lookup.
   const hostname = parsed.hostname.startsWith("[") && parsed.hostname.endsWith("]")
     ? parsed.hostname.slice(1, -1)
@@ -120,7 +130,7 @@ export async function assertUrlIsSafe(rawUrl: string): Promise<void> {
     // hiccup) would propagate as a generic Error; callers distinguish on error TYPE
     // to decide what to tell the user, so fail closed as an SsrfBlockedError.
     const reason = err instanceof Error ? err.message : String(err);
-    throw new SsrfBlockedError(rawUrl, `could not resolve hostname (${reason})`);
+    throw new SsrfBlockedError(rawUrl, `could not resolve hostname (${reason})`, "unresolvable");
   }
 
   // Fail closed if ANY resolved record is unsafe, regardless of family: undici's

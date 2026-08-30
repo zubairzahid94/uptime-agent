@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { handleMessage, type Deps } from "./handleMessage.js";
 import { PendingActionStore } from "./pendingActions.js";
 import { ConversationHistoryStore } from "./history.js";
+import { SsrfBlockedError } from "../guardrails/ssrf.js";
 
 function makeDeps(overrides: Partial<Deps> = {}): Deps {
   return {
@@ -74,6 +75,62 @@ describe("handleMessage", () => {
     const [historyArg, userMessageArg] = (deps.adapter.sendMessage as any).mock.calls[0];
     expect(userMessageArg).toBe("the new message");
     expect(historyArg.some((turn: any) => turn.text === "the new message")).toBe(false);
+  });
+
+  it("returns a user-facing message instead of throwing when a mutating handler hits the SSRF guardrail", async () => {
+    const deps = makeDeps();
+    deps.pendingActions.set(ctx.channelId, ctx.userId, {
+      toolName: "create_monitor",
+      args: { url: "http://169.254.169.254/", intervalSeconds: 60 },
+      createdAt: Date.now(),
+    });
+    (deps.mutatingHandlers.createMonitor as any).mockRejectedValue(
+      new SsrfBlockedError("http://169.254.169.254/", "resolves to a blocked IP range"),
+    );
+
+    const reply = await handleMessage(deps, { ...ctx, text: "yes" });
+
+    expect(reply.toLowerCase()).toMatch(/private|internal/);
+    expect(reply).not.toContain("169.254"); // no raw guardrail internals leaked to the user
+  });
+
+  it("returns a generic message (not a rejection) when a handler throws something unexpected", async () => {
+    const deps = makeDeps();
+    (deps.adapter.sendMessage as any).mockResolvedValue({ kind: "tool_call", toolName: "list_monitors", args: {} });
+    (deps.readHandlers.listMonitors as any).mockRejectedValue(new Error("sqlite is on fire"));
+
+    const reply = await handleMessage(deps, { ...ctx, text: "list my monitors" });
+
+    expect(reply.toLowerCase()).toContain("something went wrong");
+    expect(reply).not.toContain("sqlite"); // real error is logged server-side, not shown
+  });
+
+  it("appends a confirmed mutating action's result to history so a follow-up can resolve against it", async () => {
+    const deps = makeDeps();
+    const ambiguous = 'Multiple monitors match "shop":\n- https://shop-a.com\n- https://shop-b.com\nWhich one?';
+    deps.pendingActions.set(ctx.channelId, ctx.userId, {
+      toolName: "pause_monitor",
+      args: { identifier: "shop" },
+      createdAt: Date.now(),
+    });
+    (deps.mutatingHandlers.pauseMonitor as any).mockResolvedValue({ kind: "ambiguous", message: ambiguous, candidates: [] });
+
+    const reply = await handleMessage(deps, { ...ctx, text: "yes" });
+
+    expect(reply).toBe(ambiguous);
+    const history = deps.history.get(ctx.channelId);
+    expect(history.some((turn) => turn.role === "assistant" && turn.text === ambiguous)).toBe(true);
+    expect(history.some((turn) => turn.role === "user" && turn.text === "yes")).toBe(true);
+  });
+
+  it("also records a successful confirmed action in history", async () => {
+    const deps = makeDeps();
+    deps.pendingActions.set(ctx.channelId, ctx.userId, { toolName: "delete_monitor", args: { identifier: "a" }, createdAt: Date.now() });
+    (deps.mutatingHandlers.deleteMonitor as any).mockResolvedValue({ kind: "ok", message: 'Deleted "a".' });
+
+    await handleMessage(deps, { ...ctx, text: "yes" });
+
+    expect(deps.history.get(ctx.channelId).some((t) => t.role === "assistant" && t.text === 'Deleted "a".')).toBe(true);
   });
 
   it("rejects gracefully instead of crashing when the adapter returns an unrecognized tool name", async () => {
