@@ -43,5 +43,5 @@
     "moduleResolution": "nodenext",
     "esModuleInterop": true,
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*", "eval/**/*"]
 }

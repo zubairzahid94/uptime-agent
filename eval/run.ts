@@ -15,13 +15,20 @@ function argsMatch(
 }
 
 async function main() {
-  console.log(
-    "Running GeminiAdapter evaluation...",
-    process.env.GEMINI_API_KEY ? "" : "(GEMINI_API_KEY not set; will fail)",
-  );
-  const adapter = new GeminiAdapter(
-    new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }),
-  );
+  console.log("Running GeminiAdapter evaluation...");
+
+  // Read into a local so the narrowing sticks: GoogleGenAIOptions.apiKey is
+  // `string`, and under exactOptionalPropertyTypes passing `string | undefined`
+  // is an error. Failing fast here also beats a confusing auth error 9 cases in.
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.error(
+      "GEMINI_API_KEY is not set. Set it in .env or the environment before running the eval.",
+    );
+    process.exit(1);
+  }
+
+  const adapter = new GeminiAdapter(new GoogleGenAI({ apiKey }));
   let pass = 0;
   let fail = 0;
 
@@ -43,6 +50,14 @@ async function main() {
   for (const c of MULTI_TURN_CASES) {
     const history: ChatTurn[] = c.turns.slice(0, -1);
     const finalTurn = c.turns[c.turns.length - 1];
+    // A MultiTurnCase with fewer than 2 turns is a malformed fixture, not a model
+    // failure. Report it as such instead of crashing on an undefined access.
+    if (!finalTurn) {
+      console.log(`FAIL [multi] ${c.name}`);
+      console.log("  malformed case: needs at least one turn");
+      fail++;
+      continue;
+    }
     const result = await adapter.sendMessage(history, finalTurn.text);
     const ok =
       result.kind === "tool_call" &&
@@ -61,4 +76,10 @@ async function main() {
   process.exit(fail > 0 ? 1 : 0);
 }
 
-main();
+// Without this, an API error (bad key, quota, network) surfaces as an unhandled
+// rejection and a raw stack trace, which on Windows/Node 24 also trips a libuv abort.
+main().catch((err) => {
+  console.error("Eval failed. Check GEMINI_API_KEY is set and valid.");
+  console.error(err);
+  process.exit(1);
+});
