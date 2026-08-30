@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import { prisma } from "../db/client.js";
 import * as ssrf from "../guardrails/ssrf.js";
 import { createMonitor, editMonitor, pauseMonitor, resumeMonitor, deleteMonitor, deriveLabelFromUrl } from "./mutatingHandlers.js";
+import { shortId } from "./resolveMonitor.js";
 
 const ctx = { channelId: "dm-1", performedBy: "owner-1" };
 
@@ -28,6 +29,16 @@ describe("mutating handlers", () => {
     expect(actions[0]!.toolName).toBe("create_monitor");
   });
 
+  it("createMonitor refuses a URL that already matches an existing monitor, without creating a row or calling the SSRF check", async () => {
+    await prisma.monitor.create({ data: { url: "https://httpbin.org/status/200", label: "httpbin.org", intervalSeconds: 60 } });
+    const result = await createMonitor({ url: "https://httpbin.org/status/200", intervalSeconds: 60 }, ctx);
+    expect(result.kind).toBe("ok");
+    expect(result.message.toLowerCase()).toContain("already");
+    expect(await prisma.monitor.count()).toBe(1);
+    expect(await prisma.action.count()).toBe(0);
+    expect(ssrf.assertUrlIsSafe).not.toHaveBeenCalled();
+  });
+
   it("pauseMonitor and resumeMonitor toggle enabled", async () => {
     const m = await prisma.monitor.create({ data: { url: "https://a.com", label: "a", intervalSeconds: 60 } });
     await pauseMonitor({ identifier: "a" }, ctx);
@@ -51,6 +62,22 @@ describe("mutating handlers", () => {
     expect(await prisma.monitor.findFirst({ where: { label: "a" } })).toBeNull();
     const actions = await prisma.action.findMany({ where: { toolName: "delete_monitor" } });
     expect(actions).toHaveLength(1);
+  });
+
+  it("resolves an ambiguous delete against two identical-URL monitors by short id, deleting only the targeted one", async () => {
+    const m1 = await prisma.monitor.create({ data: { url: "https://httpbin.org/status/200", label: "httpbin.org", intervalSeconds: 60 } });
+    const m2 = await prisma.monitor.create({ data: { url: "https://httpbin.org/status/200", label: "httpbin.org", intervalSeconds: 60 } });
+
+    const ambiguous = await deleteMonitor({ identifier: "httpbin" }, ctx);
+    expect(ambiguous.kind).toBe("ambiguous");
+    expect(await prisma.monitor.count()).toBe(2);
+
+    const result = await deleteMonitor({ identifier: shortId(m2.id) }, ctx);
+    expect(result.kind).toBe("ok");
+
+    const remaining = await prisma.monitor.findMany();
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]!.id).toBe(m1.id);
   });
 
   it("returns not_found for an unresolvable identifier without touching the DB", async () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { prisma } from "../db/client.js";
-import { resolveMonitor } from "./resolveMonitor.js";
+import { resolveMonitor, shortId } from "./resolveMonitor.js";
 
 describe("resolveMonitor", () => {
   beforeEach(async () => {
@@ -31,6 +31,14 @@ describe("resolveMonitor", () => {
     const result = await resolveMonitor("hanifautos");
     expect(result.kind).toBe("ambiguous");
     if (result.kind === "ambiguous") expect(result.candidates).toHaveLength(2);
+  });
+
+  it("resolves by short id even when label and url are identical across candidates", async () => {
+    const m1 = await prisma.monitor.create({ data: { url: "https://httpbin.org/status/200", label: "httpbin.org", intervalSeconds: 60 } });
+    const m2 = await prisma.monitor.create({ data: { url: "https://httpbin.org/status/200", label: "httpbin.org", intervalSeconds: 60 } });
+    const result = await resolveMonitor(shortId(m2.id));
+    expect(result).toEqual({ kind: "found", monitor: expect.objectContaining({ id: m2.id }) });
+    expect(result.kind === "found" && result.monitor.id).not.toBe(m1.id);
   });
 });
 

@@ -1,6 +1,6 @@
 import { prisma } from "../db/client.js";
 import { assertUrlIsSafe } from "../guardrails/ssrf.js";
-import { resolveMonitor } from "./resolveMonitor.js";
+import { resolveMonitor, shortId } from "./resolveMonitor.js";
 import type { HandlerResult } from "./readHandlers.js";
 
 export interface ActionContext {
@@ -32,6 +32,10 @@ export async function createMonitor(
   if (existingCount >= maxMonitors) {
     return { kind: "ok", message: `Can't create another monitor: you're at the limit of ${maxMonitors}. Delete one first.` };
   }
+  const duplicate = await prisma.monitor.findFirst({ where: { url: args.url } });
+  if (duplicate) {
+    return { kind: "ok", message: `A monitor for ${args.url} already exists ("${duplicate.label}"). Use edit_monitor to change it, or pick a different URL.` };
+  }
   await assertUrlIsSafe(args.url);
   const monitor = await prisma.monitor.create({
     data: {
@@ -52,8 +56,8 @@ async function withResolvedMonitor(
   const resolved = await resolveMonitor(identifier);
   if (resolved.kind === "not_found") return { kind: "not_found", message: `No monitor found matching "${identifier}".` };
   if (resolved.kind === "ambiguous") {
-    const list = resolved.candidates.map((c) => `- ${c.url}`).join("\n");
-    return { kind: "ambiguous", message: `Multiple monitors match "${identifier}":\n${list}\nWhich one?`, candidates: resolved.candidates };
+    const list = resolved.candidates.map((c) => `- ${c.url} (id: ${shortId(c.id)})`).join("\n");
+    return { kind: "ambiguous", message: `Multiple monitors match "${identifier}":\n${list}\nWhich one? Reply with its id, e.g. "${shortId(resolved.candidates[0]!.id)}".`, candidates: resolved.candidates };
   }
   return fn(resolved.monitor.id);
 }

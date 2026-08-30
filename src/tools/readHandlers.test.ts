@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { prisma } from "../db/client.js";
 import { listMonitors, getMonitorStatus, getSummary } from "./readHandlers.js";
+import { shortId } from "./resolveMonitor.js";
 
 describe("read handlers", () => {
   beforeEach(async () => {
@@ -26,6 +27,15 @@ describe("read handlers", () => {
     await prisma.monitor.create({ data: { url: "https://x.com/b", label: "x-b", intervalSeconds: 60 } });
     const result = await getMonitorStatus({ identifier: "x" });
     expect(result.kind).toBe("ambiguous");
+  });
+
+  it("getMonitorStatus's ambiguous message shows each candidate's short id, even when label and url are identical", async () => {
+    const m1 = await prisma.monitor.create({ data: { url: "https://httpbin.org/status/200", label: "httpbin.org", intervalSeconds: 60 } });
+    const m2 = await prisma.monitor.create({ data: { url: "https://httpbin.org/status/200", label: "httpbin.org", intervalSeconds: 60 } });
+    const result = await getMonitorStatus({ identifier: "httpbin" });
+    expect(result.kind).toBe("ambiguous");
+    expect(result.message).toContain(shortId(m1.id));
+    expect(result.message).toContain(shortId(m2.id));
   });
 
   it("getSummary reports the total count", async () => {

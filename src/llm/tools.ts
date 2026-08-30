@@ -12,7 +12,7 @@ export interface ToolDefinition<T = any> {
 }
 
 const identifierSchema = z.object({
-  identifier: z.string().min(1).describe("URL, label, or partial match identifying the monitor"),
+  identifier: z.string().min(1).describe("URL, label, partial match, or the short id shown when a request is ambiguous"),
 });
 
 export const TOOLS: Record<ToolName, ToolDefinition> = {

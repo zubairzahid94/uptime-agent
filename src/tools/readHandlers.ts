@@ -1,5 +1,5 @@
 import { prisma, type Monitor } from "../db/client.js";
-import { resolveMonitor } from "./resolveMonitor.js";
+import { resolveMonitor, shortId } from "./resolveMonitor.js";
 
 export type HandlerResult =
   | { kind: "ok"; message: string }
@@ -22,8 +22,8 @@ export async function getMonitorStatus(args: { identifier: string }): Promise<Ha
     return { kind: "not_found", message: `No monitor found matching "${args.identifier}".` };
   }
   if (result.kind === "ambiguous") {
-    const list = result.candidates.map((c) => `- ${c.url}`).join("\n");
-    return { kind: "ambiguous", message: `Multiple monitors match "${args.identifier}":\n${list}\nWhich one?`, candidates: result.candidates };
+    const list = result.candidates.map((c) => `- ${c.url} (id: ${shortId(c.id)})`).join("\n");
+    return { kind: "ambiguous", message: `Multiple monitors match "${args.identifier}":\n${list}\nWhich one? Reply with its id, e.g. "${shortId(result.candidates[0]!.id)}".`, candidates: result.candidates };
   }
   return { kind: "ok", message: formatMonitorLine(result.monitor) };
 }
