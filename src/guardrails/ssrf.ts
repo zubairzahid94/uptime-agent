@@ -132,13 +132,35 @@ export async function assertUrlIsSafe(rawUrl: string): Promise<void> {
   }
 }
 
-export async function safeFetch(rawUrl: string, fetchImpl: typeof fetch = fetch, maxRedirects = 5): Promise<Response> {
+/**
+ * Releases a response body we are never going to read, so its socket isn't held
+ * open. Safe to call on an already-consumed, absent, or mock body.
+ */
+export function drainBody(res: Pick<Response, "body">): void {
+  try {
+    void res.body?.cancel().catch(() => {});
+  } catch {
+    // a locked/disturbed body throws synchronously; nothing to release
+  }
+}
+
+export async function safeFetch(
+  rawUrl: string,
+  fetchImpl: typeof fetch = fetch,
+  maxRedirects = 5,
+  init: Omit<RequestInit, "redirect"> = {},
+): Promise<Response> {
   let currentUrl = rawUrl;
   for (let hop = 0; hop <= maxRedirects; hop++) {
     await assertUrlIsSafe(currentUrl);
-    const res = await fetchImpl(currentUrl, { redirect: "manual" });
+    // `redirect: "manual"` is fixed, not caller-overridable: following redirects
+    // automatically would skip the per-hop assertUrlIsSafe check below.
+    const res = await fetchImpl(currentUrl, { ...init, redirect: "manual" });
     const location = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
     if (!location) return res;
+    // The redirect response's body is never read, and an unread body holds its socket
+    // open until GC. Drain it before moving to the next hop.
+    drainBody(res);
     currentUrl = new URL(location, currentUrl).toString();
   }
   throw new SsrfBlockedError(rawUrl, "too many redirects");

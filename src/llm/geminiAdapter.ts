@@ -2,6 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import { TOOLS, type ToolName } from "./tools.js";
 import type { LlmAdapter, ChatTurn, AdapterResult } from "./adapter.js";
+import { logger } from "../logger.js";
 
 interface GeminiResponseLike {
   functionCalls?:
@@ -84,15 +85,35 @@ export class GeminiAdapter implements LlmAdapter {
       { role: "user", parts: [{ text: userMessage }] },
     ];
 
-    const response = await this.client.models.generateContent({
-      model: this.model,
-      contents,
-      config: {
-        systemInstruction: SYSTEM_PROMPT,
-        tools: [{ functionDeclarations }],
-      },
-    });
+    const startedAt = Date.now();
+    let response;
+    try {
+      response = await this.client.models.generateContent({
+        model: this.model,
+        contents,
+        config: {
+          systemInstruction: SYSTEM_PROMPT,
+          tools: [{ functionDeclarations }],
+        },
+      });
+    } catch (err) {
+      logger.error("llm.sendMessage failed", {
+        model: this.model,
+        latencyMs: Date.now() - startedAt,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    }
 
-    return parseGeminiResponse(response);
+    const result = parseGeminiResponse(response);
+    // Shape only, never content: no message text, no tool args, no API key.
+    logger.info("llm.sendMessage", {
+      model: this.model,
+      historyTurns: history.length,
+      latencyMs: Date.now() - startedAt,
+      resultKind: result.kind,
+      ...(result.kind === "tool_call" ? { toolName: result.toolName } : {}),
+    });
+    return result;
   }
 }
