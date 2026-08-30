@@ -155,6 +155,36 @@ describe("runSchedulerTick", () => {
     expect(checks[0]!.statusCode).toBeNull();
   });
 
+  it("passes an abort signal to fetch so a stalled connection can't hold the tick open", async () => {
+    await prisma.monitor.create({
+      data: { url: "https://example.com", label: "example", intervalSeconds: 60, enabled: true },
+    });
+
+    const fetchImpl = vi.fn().mockResolvedValue({ status: 200, headers: new Headers() });
+    await runSchedulerTick({ fetchImpl: fetchImpl as any, timeoutMs: 5_000 });
+
+    const init = fetchImpl.mock.calls[0]![1];
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+    expect(init.signal.aborted).toBe(false);
+    expect(init.redirect).toBe("manual"); // per-hop revalidation must stay intact
+  });
+
+  it("records a failed check when the request times out", async () => {
+    const monitor = await prisma.monitor.create({
+      data: { url: "https://example.com", label: "example", intervalSeconds: 60, enabled: true, healthStatus: "up" },
+    });
+
+    const fetchImpl = vi.fn().mockRejectedValue(
+      Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" }),
+    );
+    await runSchedulerTick({ fetchImpl: fetchImpl as any, timeoutMs: 10 });
+
+    const checks = await prisma.check.findMany({ where: { monitorId: monitor.id } });
+    expect(checks).toHaveLength(1);
+    expect(checks[0]!.success).toBe(false);
+    expect(checks[0]!.error).toContain("aborted");
+  });
+
   it("skips monitors that are not yet due", async () => {
     const monitor = await prisma.monitor.create({
       data: {
