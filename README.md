@@ -80,6 +80,7 @@ arguments are re-validated against a Zod schema before any handler runs.
 | `delete_monitor` | Permanently delete a monitor | Yes |
 | `edit_monitor` | Change a monitor's interval, expected status, url, or label | Yes |
 | `get_summary` | Get a count/overview of all monitors | No |
+| `get_monitor_history` | Show the most recent checks (poll attempts) for one monitor | No |
 
 Read-only tools never require confirmation. Every mutating tool requires a
 yes/no confirmation, uniformly, no risk-tiering - and the confirmation

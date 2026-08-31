@@ -12,7 +12,7 @@ export interface Deps {
   adapter: Pick<LlmAdapter, "sendMessage">;
   pendingActions: PendingActionStore;
   history: ConversationHistoryStore;
-  readHandlers: Pick<typeof readHandlersModule, "listMonitors" | "getMonitorStatus" | "getSummary">;
+  readHandlers: Pick<typeof readHandlersModule, "listMonitors" | "getMonitorStatus" | "getSummary" | "getMonitorHistory">;
   mutatingHandlers: Pick<typeof mutatingHandlersModule, "createMonitor" | "editMonitor" | "pauseMonitor" | "resumeMonitor" | "deleteMonitor">;
 }
 
@@ -43,6 +43,7 @@ async function runReadHandler(deps: Deps, toolName: ToolName, args: unknown): Pr
     case "list_monitors": return (await deps.readHandlers.listMonitors()).message;
     case "get_monitor_status": return (await deps.readHandlers.getMonitorStatus(args as any)).message;
     case "get_summary": return (await deps.readHandlers.getSummary()).message;
+    case "get_monitor_history": return (await deps.readHandlers.getMonitorHistory(args as any)).message;
     default: throw new Error(`runReadHandler: ${toolName} is not read-only`);
   }
 }

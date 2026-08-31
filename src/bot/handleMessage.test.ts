@@ -9,7 +9,7 @@ function makeDeps(overrides: Partial<Deps> = {}): Deps {
     adapter: { sendMessage: vi.fn() },
     pendingActions: new PendingActionStore(),
     history: new ConversationHistoryStore(),
-    readHandlers: { listMonitors: vi.fn(), getMonitorStatus: vi.fn(), getSummary: vi.fn() },
+    readHandlers: { listMonitors: vi.fn(), getMonitorStatus: vi.fn(), getSummary: vi.fn(), getMonitorHistory: vi.fn() },
     mutatingHandlers: { createMonitor: vi.fn(), editMonitor: vi.fn(), pauseMonitor: vi.fn(), resumeMonitor: vi.fn(), deleteMonitor: vi.fn() },
     ...overrides,
   } as Deps;
@@ -24,6 +24,15 @@ describe("handleMessage", () => {
     (deps.readHandlers.listMonitors as any).mockResolvedValue({ kind: "ok", message: "no monitors" });
     const reply = await handleMessage(deps, { ...ctx, text: "list my monitors" });
     expect(reply).toBe("no monitors");
+    expect(deps.pendingActions.get(ctx.channelId, ctx.userId)).toBeUndefined();
+  });
+
+  it("routes get_monitor_history straight through without confirmation", async () => {
+    const deps = makeDeps();
+    (deps.adapter.sendMessage as any).mockResolvedValue({ kind: "tool_call", toolName: "get_monitor_history", args: { identifier: "a" } });
+    (deps.readHandlers.getMonitorHistory as any).mockResolvedValue({ kind: "ok", message: "History for a (https://a.com):\n- 5m ago: ✅ 200, 100ms" });
+    const reply = await handleMessage(deps, { ...ctx, text: "show history for a" });
+    expect(reply).toContain("History for a");
     expect(deps.pendingActions.get(ctx.channelId, ctx.userId)).toBeUndefined();
   });
 

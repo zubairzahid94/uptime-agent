@@ -69,6 +69,18 @@ export const SINGLE_TURN_CASES: SingleTurnCase[] = [
     expectedTool: "get_monitor_status",
     expectedArgs: { identifier: "myapp" },
   },
+  {
+    kind: "single_turn", name: "history default count",
+    input: "show me the history for myapp",
+    expectedTool: "get_monitor_history",
+    expectedArgs: { identifier: "myapp" },
+  },
+  {
+    kind: "single_turn", name: "history explicit count",
+    input: "show me the last 20 checks for myapp",
+    expectedTool: "get_monitor_history",
+    expectedArgs: { identifier: "myapp", limit: 20 },
+  },
 ];
 
 export const MULTI_TURN_CASES: MultiTurnCase[] = [

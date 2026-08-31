@@ -1,5 +1,25 @@
 import { describe, it, expect } from "vitest";
-import { renderConfirmationPrompt, renderAlertMessage, chunkMessage, DISCORD_MESSAGE_LIMIT } from "./templates.js";
+import { renderConfirmationPrompt, renderAlertMessage, chunkMessage, formatRelativeTime, DISCORD_MESSAGE_LIMIT } from "./templates.js";
+
+describe("formatRelativeTime", () => {
+  const now = new Date("2026-08-31T12:00:00Z");
+
+  it("renders seconds for under a minute", () => {
+    expect(formatRelativeTime(new Date("2026-08-31T11:59:30Z"), now)).toBe("30s ago");
+  });
+
+  it("renders minutes for under an hour", () => {
+    expect(formatRelativeTime(new Date("2026-08-31T11:55:00Z"), now)).toBe("5m ago");
+  });
+
+  it("renders hours for under a day", () => {
+    expect(formatRelativeTime(new Date("2026-08-31T09:00:00Z"), now)).toBe("3h ago");
+  });
+
+  it("renders days at a day or more", () => {
+    expect(formatRelativeTime(new Date("2026-08-29T12:00:00Z"), now)).toBe("2d ago");
+  });
+});
 
 describe("chunkMessage", () => {
   it("leaves a short message as a single chunk", () => {

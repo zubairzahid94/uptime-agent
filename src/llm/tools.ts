@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export type ToolName =
   | "create_monitor" | "list_monitors" | "get_monitor_status" | "pause_monitor"
-  | "resume_monitor" | "delete_monitor" | "edit_monitor" | "get_summary";
+  | "resume_monitor" | "delete_monitor" | "edit_monitor" | "get_summary" | "get_monitor_history";
 
 export interface ToolDefinition<T = any> {
   name: ToolName;
@@ -74,5 +74,14 @@ export const TOOLS: Record<ToolName, ToolDefinition> = {
     description: "Get a count/overview of all monitors",
     mutating: false,
     schema: z.object({}),
+  },
+  get_monitor_history: {
+    name: "get_monitor_history",
+    description: "Get the recent check history (most recent poll attempts) for one monitor",
+    mutating: false,
+    schema: z.object({
+      identifier: z.string().min(1).describe("URL, label, partial match, or the short id shown when a request is ambiguous"),
+      limit: z.number().int().optional().describe("How many recent checks to show, defaults to 10, capped at 25"),
+    }),
   },
 };
